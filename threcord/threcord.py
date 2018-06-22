@@ -1,10 +1,7 @@
-# -*- coding: utf-8 -*-
-
 """Pytorch tfrecord reader and writer utils.
-pytorch 0.3 tensorflow 1.8
-
 """
 
+# -*- coding: utf-8 -*-
 import os
 import glob
 import multiprocessing
@@ -19,7 +16,6 @@ import cv2
 
 class RecordsMaker(object):
     """Transform a torch dataset into tfrecords files.
-
     """
     def __init__(self, th_dataset, save_dir, dataset_name,
                  datatype, workers=1, shards_num=1, **kwargs):
@@ -49,10 +45,10 @@ class RecordsMaker(object):
                 shape: required by img and array
 
                 Example:
-                    img={'shape'=(256,256,3)},
-                    s={'shape'=(256,256,3)},
-                    shape={'shape'=(256,256,3)},
-                    exp={'shape'=(256,256,3)}
+                    img={'shape':(256,256,3)},
+                    s={'shape':(256,256,3)},
+                    shape={'shape':(256,256,3)},
+                    exp={'shape':(256,256,3)}
         """
 
         assert isinstance(th_dataset, Dataset), "Need a torch.util.data.Dataset"
@@ -172,6 +168,7 @@ class RecordsMaker(object):
                 writer.write(features.SerializeToString())
 
     def __getstate__(self):
+        # pool instance cannot be pickled
         self_dict = self.__dict__.copy()
         del self_dict['pool']
         return self_dict
@@ -182,7 +179,6 @@ class RecordsMaker(object):
 
 class RecordsLoader(object):
     """TF record reader.
-
     """
     def __init__(self, batch_size, dataset_dir, epochs, parallel_calls,
                  shuffle_size, augmentation=None):
@@ -196,7 +192,7 @@ class RecordsLoader(object):
             shuffle_size: shuffle size for tensorflow reader
             augmentation:
         """
-        with open(os.path.join(dataset_dir, 'dataset_config.pkl')) as file:
+        with open(os.path.join(dataset_dir, 'dataset_config.pkl'), 'rb') as file:
             config = pickle.load(file)
 
         self.datatype = config['datatype']
@@ -219,22 +215,8 @@ class RecordsLoader(object):
         ))
         del os.environ["CUDA_VISIBLE_DEVICES"]
 
-        # Build I/O graph
-        self.examples = self._build_graph()
-
-    def _parser(self, record, datatype):
-        """
-
-        Args:
-            record:
-            datatype:
-
-        Returns:
-
-        """
-
-        keys_to_features = {}
-        for key, val in datatype.items():
+        self.keys_to_features = {}
+        for key, val in self.datatype.items():
             if val == 'img':
                 item = {key: tf.FixedLenFeature(shape=(), dtype=tf.string)}
             elif val == 'array':
@@ -245,26 +227,37 @@ class RecordsLoader(object):
                 item = {key: tf.FixedLenFeature(shape=(), dtype=tf.int32)}
             else:
                 raise NotImplementedError
-            keys_to_features.update(item)
+            self.keys_to_features.update(item)
 
-        features = tf.parse_single_example(record, features=keys_to_features)
+        # Build I/O graph
+        self.examples = self._build_graph()
+
+    def _parser(self, record):
+        """
+
+        Args:
+            record:
+
+        Returns:
+
+        """
+        features = tf.parse_single_example(record, features=self.keys_to_features)
 
         feature_dict = {
-            k: self._img_parser(features[k]) if v == 'img' else features[k]
-            for k, v in datatype.items()
+            k: self._img_parser(img_raw=features[k], key=k) if v == 'img' else features[k]
+            for k, v in self.datatype.items()
         }
         return feature_dict
 
-    @staticmethod
-    def _img_parser(img_raw):
+    def _img_parser(self, img_raw, key):
         buffer = tf.cast(tf.image.decode_jpeg(img_raw, channels=3), tf.uint8)
-        buffer = tf.reshape(buffer, shape=(256, 256, 3))
+        buffer = tf.reshape(buffer, shape=self.info[key]['shape'])
         return buffer
 
     def _build_graph(self):
-        dataset = tf.data.TFRecordDataset(self.dataset_dir)
+        dataset = tf.data.TFRecordDataset(self.dataset_dir, compression_type='GZIP')
         dataset = dataset.map(
-            lambda x: self._parser(x, datatype=self.datatype),
+            lambda x: self._parser(x),
             num_parallel_calls=self.parallel_calls)
         dataset = dataset.shuffle(self.shuffle_size)
         dataset = dataset.repeat(
