@@ -17,6 +17,7 @@ pip install .
 ## Usage
 
 - RecordsMaker
+
 ```python
 from threcord import RecordsMaker
 
@@ -58,10 +59,29 @@ maker.run()
 ```
 
 - RecordsLoader
+
 ```python
- 
+from threcord import RecordsLoader
 
+# Create DataAug class if in need
+# aug = DataAug(...)
+# the augmentation class instance should accept a dict
+# and return a dict with same keys while having new augmented values.
 
+# create RecordsLoader instance first
+loader = RecordsLoader(
+    batch_size=32,
+    dataset_dir='path/to/dataset/',
+    epochs=10,
+    parallel_calls=4,
+    shuffle_size=200,
+    # if there is data augmentation
+    # augmentation = aug
+    augmentation=None
+)
 
-
+for example in loader:
+    # example is a dict whose content is th.Tensor
+    # loader will raise StopIteration after the epochs designated.
+    break
 ```
