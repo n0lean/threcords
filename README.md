@@ -85,3 +85,78 @@ for example in loader:
     # loader will raise StopIteration after the epochs designated.
     break
 ```
+
+## Example
+
+```python
+from threcord import RecordsMaker
+from dataloader import UVData
+
+# create a torch dataset
+# the dataset should return an example as a dict
+# e.g.
+# {
+#     'img': img,
+#     'label': label
+# }
+
+dataset = UVData(img_path='/home/chenpengyu/3DMM/300W-3D/*/*.jpg',
+                 label_path='/home/chenpengyu/3DMM/300W-3D-UV')
+
+# prepare type information
+# type info should be a dict share the same keys with dataset output
+# only 4 accepted data type here: img, array, string, int
+# you could implement any more of them.
+
+datainfo = {
+    'img': 'img',
+    's': 'array',
+    'shape': 'array',
+    'exp': 'array'
+}
+
+maker = RecordsMaker(
+    th_dataset=dataset,
+    save_dir='./threcord_test/',
+    dataset_name='example_uv_dataset',
+    datatype=datainfo,
+    workers=4,
+    shards_num=100,
+    # use kwargs to provide additional information need by the RecordsMaker
+    # At present, shape argument is needed for img and array data type.
+    img={'shape': (256,256,3)},
+    s={'shape': (256,256,3)},
+    shape={'shape': (256, 256, 3)},
+    exp={'shape': (256, 256, 3)}
+)
+
+# run the maker and wait patient.
+maker.run()
+```
+
+
+```python
+from threcord import RecordsLoader
+
+# Create DataAug class if in need
+# aug = DataAug(...)
+# the augmentation class instance should accept a dict
+# and return a dict with same keys while having new augmented values.
+
+# create RecordsLoader instance first
+loader = RecordsLoader(
+    batch_size=32,
+    dataset_dir='./threcord_test/',
+    epochs=10,
+    parallel_calls=4,
+    shuffle_size=200,
+    # if there is data augmentation
+    # augmentation = aug
+    augmentation=None
+)
+
+for example in loader:
+    break
+```
+
+
